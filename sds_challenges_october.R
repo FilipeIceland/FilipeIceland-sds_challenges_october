@@ -3,6 +3,8 @@ library(dplyr)
 library(ggplot2)
 library(ggcorrplot)
 library(corrplot)
+library(rcompanion)
+
 df <- read.csv("data/public_cars.csv")
 df_pred <- read.csv("data/pred_cars.csv")
 all_names <- names(df)
@@ -17,11 +19,23 @@ all_num_names <- c(num_names,target_name)
 df_all_num <- df[,all_num_names]
 corr_num <- cor(df_all_num)
 
+n_comb <- n_cat*n_cat
+cramers <- data.frame(matrix(rep(1, n_comb), ncol = n_cat))
+rownames(cramers) <- cat_names
+colnames(cramers) <- cat_names
+c <- 1
+for (i in 1:(n_cat-1)){
+  cat.name <- cat_names[i]
+  for (j in (i+1):n_cat){
+    cat2.name <- cat_names[j]
+    #cc <- showNotification(paste0(cat.name, '&', cat2.name, " ", toString(c), "/", toString(n_comb)), duration = 25)
+    cramers[i,j] <- cramerV(df[,cat.name], df[,cat2.name])
+    cramers[j,i] <- cramerV(df[,cat.name], df[,cat2.name])
+  }
+}
 
-  
 ui <- fluidPage(
 
-    # Application title
     titlePanel("Car challenge"),
     
     navbarPage("My Application",
@@ -59,10 +73,13 @@ ui <- fluidPage(
                      )
                 )        
         ),
+        tabPanel("Categoric relationships (Cramers V)",
+                 plotOutput(outputId = "cramerID", height = 700)
+        ),
         tabPanel("F-Statistic",
-                 actionButton(inputId = "buttonID",
-                              label = "Show F-Statistic"),
-                 plotOutput(outputId = "fPlot", height = 700)
+                   actionButton(inputId = "buttonID",
+                                label = "Show F-Statistic"),
+                   plotOutput(outputId = "fPlot", height = 700)
         ),
         tabPanel("Pivot tables",
                  sidebarPanel(
@@ -112,8 +129,8 @@ server <- function(input, output) {
     
     
     paov <- eventReactive(input$buttonID, {
-      n_comb = n_cat*n_num2
-      p_aov<-data.frame(matrix(rep(0, n_comb), ncol = n_num2))
+      n_comb <- n_cat*n_num2
+      p_aov <- data.frame(matrix(rep(0, n_comb), ncol = n_num2))
       rownames(p_aov) <- cat_names
       colnames(p_aov) <- all_num_names
       c <- 1
@@ -135,9 +152,11 @@ server <- function(input, output) {
     output$fPlot <- renderPlot({paov() })
     
     output$pivottableID <- renderTable({
-      pivot_table <- df %>% group_by_(input$catradiobox1ID, input$catradiobox2ID) %>% summarize(count =  n())
+      pivot_table <- df %>% group_by_(input$catradiobox1ID, input$catradiobox2ID) %>% summarize(count =  n(), mean(price_usd))
       pivot_table
     })
+    
+    output$cramerID <- renderPlot({ggcorrplot(cramers, type = "lower",lab = TRUE, digits = 2)})
 }
 
 
